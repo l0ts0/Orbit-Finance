@@ -482,7 +482,7 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
           return (
             <div
               key={t.id}
-              className="flex items-start justify-between gap-3 p-3 hover:bg-slate-800/40 rounded-xl transition-colors group cursor-pointer flex-wrap md:flex-nowrap"
+              className="flex items-start justify-between gap-3 p-3 hover:bg-slate-800/40 rounded-xl transition-colors group cursor-pointer"
               onClick={() => startEditTransaction(t)}
             >
               <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -497,8 +497,8 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-4 min-w-[96px] md:min-w-[120px] md:self-auto self-start">
-                <div className="text-right flex-1">
+              <div className="flex items-center gap-4 md:gap-6 shrink-0 md:self-auto self-start text-right">
+                <div className="text-right">
                   <div className={`${isIncome ? 'text-emerald-400' : 'text-rose-400'} font-bold font-mono`}>
                     {isIncome ? '+' : '-'}{CURRENCY_SYMBOLS[displayCurrency]}{displayAmount.toLocaleString()}
                   </div>
