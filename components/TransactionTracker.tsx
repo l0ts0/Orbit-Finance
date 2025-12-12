@@ -480,8 +480,12 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
           const displayAmount = Math.round(t.amount * exchangeRate);
 
           return (
-            <div key={t.id} className="flex items-center justify-between p-3 hover:bg-slate-800/40 rounded-xl transition-colors group cursor-pointer" onClick={() => startEditTransaction(t)}>
-              <div className="flex items-center gap-3">
+            <div
+              key={t.id}
+              className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-3 hover:bg-slate-800/40 rounded-xl transition-colors group cursor-pointer"
+              onClick={() => startEditTransaction(t)}
+            >
+              <div className="flex items-center gap-3 w-full">
                 <div className={`p-2.5 rounded-xl ${catDef?.color || 'text-slate-400 bg-slate-800'} transition-transform group-hover:scale-110`}>
                   {ICON_MAP[catDef?.icon || 'MoreHorizontal'] || ICON_MAP['MoreHorizontal']}
                 </div>
@@ -493,8 +497,7 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
                   </div>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 md:self-auto self-end">
                 <div className="text-right">
                   <div className={`${isIncome ? 'text-emerald-400' : 'text-rose-400'} font-bold font-mono`}>
                     {isIncome ? '+' : '-'}{CURRENCY_SYMBOLS[displayCurrency]}{displayAmount.toLocaleString()}
