@@ -17,7 +17,13 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supabase) {
-      setError("Supabase client not initialized. Check .env settings.");
+      const detail = "Supabase client not initialized. Check VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY) in env.";
+      console.error(detail, {
+        VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+        VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY,
+      });
+      setError(detail);
       return;
     }
     
