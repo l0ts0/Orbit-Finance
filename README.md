@@ -5,13 +5,13 @@
 ## 快速開始
 - 安裝套件：`npm install`
 - 設定 `.env.local`：
-  - `NEXT_PUBLIC_SUPABASE_URL=...`
-  - `NEXT_PUBLIC_SUPABASE_ANON_KEY=...`
+  - `VITE_SUPABASE_URL=...`
+  - `VITE_SUPABASE_ANON_KEY=...`
 - 啟動開發伺服器：`npm run dev`
 
 ## 部署到 Vercel
 1. 將程式碼推送到 Git repository 並在 Vercel 建立專案。
-2. 在 Vercel 專案的 Environment Variables 中設定 `NEXT_PUBLIC_SUPABASE_URL` 與 `NEXT_PUBLIC_SUPABASE_ANON_KEY`（Production / Preview 同步設定）。
+2. 在 Vercel 專案的 Environment Variables 中設定 `VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY`（Production / Preview 同步設定）。
 3. 部署後即可使用，所有 API 呼叫與匯率/股價抓取都在前端完成，請留意瀏覽器 CORS/網路連線。
 
 ## Supabase 資料表對應
