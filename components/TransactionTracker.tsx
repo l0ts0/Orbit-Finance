@@ -489,11 +489,15 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
                 <div className={`p-2.5 rounded-xl ${catDef?.color || 'text-slate-400 bg-slate-800'} transition-transform group-hover:scale-110`}>
                   {ICON_MAP[catDef?.icon || 'MoreHorizontal'] || ICON_MAP['MoreHorizontal']}
                 </div>
-                <div>
-                  <p className="text-slate-200 text-sm font-medium">{t.note}</p>
-                  <div className="flex items-center gap-2">
-                     <p className="text-slate-500 text-xs">{new Date(t.date).toLocaleString([], {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'})}</p>
-                     {t.sourceAssetName && <p className="text-indigo-400/60 text-xs px-1.5 py-0.5 bg-indigo-500/10 rounded">{t.sourceAssetName}</p>}
+                <div className="min-w-0">
+                  <p className="text-slate-200 text-sm font-medium truncate">{t.note}</p>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+                     <p>{new Date(t.date).toLocaleString([], {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'})}</p>
+                     {t.sourceAssetName && (
+                       <p className="text-indigo-400/70 px-1.5 py-0.5 bg-indigo-500/10 rounded whitespace-nowrap">
+                         {t.sourceAssetName}
+                       </p>
+                     )}
                   </div>
                 </div>
               </div>
