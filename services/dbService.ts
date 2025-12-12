@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Holding, Transaction, CategoryDef } from '../types';
+import { Holding, Transaction, CategoryDef, Automation, SystemLog } from '../types';
 
 // Map DB snake_case to app camelCase
 const mapHoldingFromDB = (h: any): Holding => ({
@@ -35,6 +35,31 @@ const mapCategoryFromDB = (c: any): CategoryDef => ({
   keywords: c.keywords || []
 });
 
+const mapAutomationFromDB = (a: any): Automation => ({
+  id: a.id,
+  name: a.name,
+  type: a.type,
+  amount: Number(a.amount),
+  currency: a.currency,
+  dayOfMonth: a.day_of_month,
+  category: a.category,
+  transactionType: a.transaction_type,
+  targetAssetId: a.target_asset_id,
+  sourceAssetId: a.source_asset_id,
+  investAssetId: a.invest_asset_id,
+  active: a.active,
+  lastRun: a.last_run
+});
+
+const mapSystemLogFromDB = (log: any): SystemLog => ({
+  id: log.id,
+  date: log.date,
+  title: log.title,
+  description: log.description,
+  status: log.status,
+  amount: log.amount || undefined
+});
+
 export const dbService = {
   // --- FETCH ALL DATA ---
   async fetchUserData(userId: string) {
@@ -43,11 +68,15 @@ export const dbService = {
     const { data: holdings } = await supabase.from('holdings').select('*').eq('user_id', userId);
     const { data: transactions } = await supabase.from('transactions').select('*').eq('user_id', userId).order('date', { ascending: false });
     const { data: categories } = await supabase.from('categories').select('*').eq('user_id', userId);
+    const { data: automations } = await supabase.from('automations').select('*').eq('user_id', userId);
+    const { data: systemLogs } = await supabase.from('system_logs').select('*').eq('user_id', userId).order('date', { ascending: false });
 
     return {
       holdings: holdings?.map(mapHoldingFromDB) || [],
       transactions: transactions?.map(mapTransactionFromDB) || [],
-      categories: categories?.map(mapCategoryFromDB) || []
+      categories: categories?.map(mapCategoryFromDB) || [],
+      automations: automations?.map(mapAutomationFromDB) || [],
+      systemLogs: systemLogs?.map(mapSystemLogFromDB) || []
     };
   },
 
@@ -153,5 +182,76 @@ export const dbService = {
     if (!supabase) return;
     const { error } = await supabase.from('categories').delete().eq('id', id);
     if (error) console.error('Error deleting category:', error);
+  },
+
+  // --- AUTOMATIONS ---
+  async addAutomation(userId: string, a: Partial<Automation>) {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('automations').insert({
+      user_id: userId,
+      name: a.name,
+      type: a.type,
+      amount: a.amount,
+      currency: a.currency,
+      day_of_month: a.dayOfMonth,
+      category: a.category,
+      transaction_type: a.transactionType,
+      target_asset_id: a.targetAssetId,
+      source_asset_id: a.sourceAssetId,
+      invest_asset_id: a.investAssetId,
+      active: a.active ?? true,
+      last_run: a.lastRun || null
+    }).select().single();
+    if (error) console.error('Error adding automation:', error);
+    return data ? mapAutomationFromDB(data) : null;
+  },
+
+  async updateAutomation(id: string, updates: Partial<Automation>) {
+    if (!supabase) return;
+    const dbUpdates: any = { ...updates };
+    if (updates.dayOfMonth !== undefined) dbUpdates.day_of_month = updates.dayOfMonth;
+    if (updates.transactionType !== undefined) dbUpdates.transaction_type = updates.transactionType;
+    if (updates.targetAssetId !== undefined) dbUpdates.target_asset_id = updates.targetAssetId;
+    if (updates.sourceAssetId !== undefined) dbUpdates.source_asset_id = updates.sourceAssetId;
+    if (updates.investAssetId !== undefined) dbUpdates.invest_asset_id = updates.investAssetId;
+    if (updates.lastRun !== undefined) dbUpdates.last_run = updates.lastRun;
+
+    delete dbUpdates.id;
+    delete dbUpdates.dayOfMonth;
+    delete dbUpdates.transactionType;
+    delete dbUpdates.targetAssetId;
+    delete dbUpdates.sourceAssetId;
+    delete dbUpdates.investAssetId;
+    delete dbUpdates.lastRun;
+
+    const { error } = await supabase.from('automations').update(dbUpdates).eq('id', id);
+    if (error) console.error('Error updating automation:', error);
+  },
+
+  async deleteAutomation(id: string) {
+    if (!supabase) return;
+    const { error } = await supabase.from('automations').delete().eq('id', id);
+    if (error) console.error('Error deleting automation:', error);
+  },
+
+  // --- SYSTEM LOGS ---
+  async addSystemLog(userId: string, log: Partial<SystemLog>) {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('system_logs').insert({
+      user_id: userId,
+      date: log.date,
+      title: log.title,
+      description: log.description,
+      status: log.status,
+      amount: log.amount
+    }).select().single();
+    if (error) console.error('Error adding system log:', error);
+    return data ? mapSystemLogFromDB(data) : null;
+  },
+
+  async clearSystemLogs(userId: string) {
+    if (!supabase) return;
+    const { error } = await supabase.from('system_logs').delete().eq('user_id', userId);
+    if (error) console.error('Error clearing system logs:', error);
   }
 };

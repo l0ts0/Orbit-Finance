@@ -118,6 +118,8 @@ export default function App() {
              if (data.categories.length > 0) setCategories(data.categories);
              else setCategories(INITIAL_CATEGORIES);
           }
+          setAutomations(data.automations || []);
+          setSystemLogs(data.systemLogs || []);
         }
         setLoadingData(false);
       } else {
@@ -125,6 +127,8 @@ export default function App() {
         setHoldings(INITIAL_HOLDINGS);
         setCategories(INITIAL_CATEGORIES);
         setTransactions(INITIAL_TRANSACTIONS);
+        setAutomations(INITIAL_AUTOMATIONS);
+        setSystemLogs([]);
       }
     }
     loadData();
@@ -304,20 +308,28 @@ export default function App() {
   };
 
   // --- Automation Logic ---
-  const handleAddAutomation = (a: Omit<Automation, 'id'>) => {
-    const newAuto = { ...a, id: Math.random().toString(36).substr(2, 9) };
+  const handleAddAutomation = async (a: Omit<Automation, 'id'>) => {
+    const tempId = Math.random().toString(36).substr(2, 9);
+    const newAuto = { ...a, id: tempId };
     setAutomations(prev => [...prev, newAuto]);
+
+    if (user) {
+      const saved = await dbService.addAutomation(user.id, a);
+      if (saved) setAutomations(prev => prev.map(auto => auto.id === tempId ? saved : auto));
+    }
   };
 
-  const handleDeleteAutomation = (id: string) => {
+  const handleDeleteAutomation = async (id: string) => {
     setAutomations(prev => prev.filter(a => a.id !== id));
+    if (user) await dbService.deleteAutomation(id);
   };
 
-  const handleRunAutomations = () => {
+  const handleRunAutomations = async () => {
     // Simulation Logic
     const newLogs: SystemLog[] = [];
     let updatedHoldings = [...holdings];
     let newTransactions: Transaction[] = [];
+    const runTimestamp = new Date().toISOString();
 
     automations.forEach(auto => {
       if (!auto.active) return;
@@ -439,6 +451,43 @@ export default function App() {
     setHoldings(updatedHoldings);
     setTransactions(prev => [...newTransactions, ...prev]);
     setSystemLogs(prev => [...newLogs, ...prev]);
+    setAutomations(prev => prev.map(a => a.active ? { ...a, lastRun: runTimestamp } : a));
+
+    if (user) {
+      const changedHoldings = updatedHoldings.filter(h => {
+        const original = holdings.find(o => o.id === h.id);
+        return original && original.quantity !== h.quantity;
+      });
+      await Promise.all(changedHoldings.map(h => dbService.updateHolding(h.id, { quantity: h.quantity })));
+
+      const txResults = await Promise.all(newTransactions.map(tx => dbService.addTransaction(user.id, tx)));
+      if (txResults.some(Boolean)) {
+        const txMap: Record<string, Transaction> = {};
+        newTransactions.forEach((tx, idx) => {
+          const saved = txResults[idx];
+          if (saved) txMap[tx.id] = saved;
+        });
+        setTransactions(prev => prev.map(tx => txMap[tx.id] ? txMap[tx.id] : tx));
+      }
+
+      const logResults = await Promise.all(newLogs.map(log => dbService.addSystemLog(user.id, log)));
+      if (logResults.some(Boolean)) {
+        const logMap: Record<string, SystemLog> = {};
+        newLogs.forEach((log, idx) => {
+          const saved = logResults[idx];
+          if (saved) logMap[log.id] = saved;
+        });
+        setSystemLogs(prev => prev.map(l => logMap[l.id] ? logMap[l.id] : l));
+      }
+
+      const autosToUpdate = automations.filter(a => a.active);
+      await Promise.all(autosToUpdate.map(a => dbService.updateAutomation(a.id, { lastRun: runTimestamp })));
+    }
+  };
+
+  const handleClearSystemLogs = async () => {
+    setSystemLogs([]);
+    if (user) await dbService.clearSystemLogs(user.id);
   };
 
   // --- Render ---
@@ -483,7 +532,7 @@ export default function App() {
          <SystemLogs 
            logs={systemLogs} 
            onClose={() => setShowSystemLogs(false)} 
-           onClear={() => setSystemLogs([])} 
+           onClear={handleClearSystemLogs} 
          />
       )}
 
