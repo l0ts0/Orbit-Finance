@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+        includeAssets: ['apple-touch-icon.png', 'logo.svg'],
         manifest: {
           name: 'Orbit Finance',
           short_name: 'Orbit',
@@ -25,26 +25,26 @@ export default defineConfig(({ mode }) => {
               src: '/pwa-192x192.png',
               sizes: '192x192',
               type: 'image/png',
-              purpose: 'any maskable'
+              purpose: 'any'
             },
             {
               src: '/pwa-512x512.png',
               sizes: '512x512',
               type: 'image/png',
-              purpose: 'any maskable'
+              purpose: 'any'
             }
           ],
           screenshots: [
             {
               src: '/screenshot-mobile.png',
-              sizes: '375x812',
+              sizes: '500x717',
               type: 'image/png',
               form_factor: 'narrow',
               label: 'Mobile Dashboard'
             },
             {
               src: '/screenshot-desktop.png',
-              sizes: '1280x800',
+              sizes: '1264x705',
               type: 'image/png',
               form_factor: 'wide',
               label: 'Desktop Dashboard'
@@ -53,6 +53,9 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+        },
+        devOptions: {
+          enabled: true
         }
       })
     ],

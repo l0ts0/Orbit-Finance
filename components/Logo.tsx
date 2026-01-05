@@ -3,7 +3,7 @@ import React from 'react';
 export const Logo = ({ className = "w-8 h-8", showText = true }: { className?: string, showText?: boolean }) => (
   <div className="flex items-center gap-3 select-none">
     <div className={`relative flex items-center justify-center ${className}`}>
-      <img src="/pwa-192x192.png" alt="Orbit Logo" className="w-full h-full object-contain drop-shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+      <img src="/logo.svg" alt="Orbit Finance Logo" className="w-full h-full drop-shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
     </div>
     {showText && (
       <div className="flex flex-col justify-center">

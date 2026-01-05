@@ -15,7 +15,7 @@ export interface Holding {
   type: AssetType;
   price: number; // Unit price (1 for Cash)
   quantity: number;
-  currency: Currency; 
+  currency: Currency;
   color?: string; // For the chart
   change24h: number;
   billDay?: number; // Only for Credit Card (1-31)
@@ -59,16 +59,16 @@ export interface Automation {
   amount: number; // Fixed amount for recurring, Budget for DCA
   currency: Currency; // Usually TWD
   dayOfMonth: number; // 1-31
-  
+
   // For Recurring (Income/Expense)
   category?: string;
   transactionType?: 'INCOME' | 'EXPENSE';
   targetAssetId?: string; // Bank for Income, Card/Bank for Expense
-  
+
   // For DCA
   sourceAssetId?: string; // Bank to deduct from
   investAssetId?: string; // Stock to buy
-  
+
   active: boolean;
   lastRun?: string;
 }
