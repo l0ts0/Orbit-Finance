@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Currency, 
-  Holding, 
-  AssetType, 
+import {
+  Currency,
+  Holding,
+  AssetType,
   ChartData,
   Transaction,
   CategoryDef,
@@ -47,12 +47,36 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
 
-  const [globalCurrency, setGlobalCurrency] = useState<Currency>('TWD');
-  const [holdings, setHoldings] = useState<Holding[]>(INITIAL_HOLDINGS);
-  const [categories, setCategories] = useState<CategoryDef[]>(INITIAL_CATEGORIES);
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
-  const [automations, setAutomations] = useState<Automation[]>(INITIAL_AUTOMATIONS);
-  const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
+  // Load initial state from localStorage if available (Optimistic UI)
+  const [globalCurrency, setGlobalCurrency] = useState<Currency>(() => {
+    const saved = localStorage.getItem('globalCurrency');
+    return (saved as Currency) || 'TWD';
+  });
+
+  const [holdings, setHoldings] = useState<Holding[]>(() => {
+    const saved = localStorage.getItem('holdings');
+    return saved ? JSON.parse(saved) : INITIAL_HOLDINGS;
+  });
+
+  const [categories, setCategories] = useState<CategoryDef[]>(() => {
+    const saved = localStorage.getItem('categories');
+    return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
+  });
+
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    const saved = localStorage.getItem('transactions');
+    return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+  });
+
+  const [automations, setAutomations] = useState<Automation[]>(() => {
+    const saved = localStorage.getItem('automations');
+    return saved ? JSON.parse(saved) : INITIAL_AUTOMATIONS;
+  });
+
+  const [systemLogs, setSystemLogs] = useState<SystemLog[]>(() => {
+    const saved = localStorage.getItem('systemLogs');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUpdatingRates, setIsUpdatingRates] = useState(false);
@@ -60,7 +84,15 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAutomationPanel, setShowAutomationPanel] = useState(false);
   const [showSystemLogs, setShowSystemLogs] = useState(false);
-  
+
+  // Persistence Effects
+  useEffect(() => { localStorage.setItem('globalCurrency', globalCurrency); }, [globalCurrency]);
+  useEffect(() => { localStorage.setItem('holdings', JSON.stringify(holdings)); }, [holdings]);
+  useEffect(() => { localStorage.setItem('categories', JSON.stringify(categories)); }, [categories]);
+  useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
+  useEffect(() => { localStorage.setItem('automations', JSON.stringify(automations)); }, [automations]);
+  useEffect(() => { localStorage.setItem('systemLogs', JSON.stringify(systemLogs)); }, [systemLogs]);
+
   // Mobile Navigation State
   const [mobileTab, setMobileTab] = useState<'ledger' | 'assets'>('ledger');
 
@@ -74,8 +106,8 @@ export default function App() {
   // Exchange Rates State (1 TWD = ?)
   const [rates, setRates] = useState<Record<Currency, number>>({
     'TWD': 1,
-    'USD': 0.0307, 
-    'JPY': 4.7,    
+    'USD': 0.0307,
+    'JPY': 4.7,
   });
   const [ratesLastUpdated, setRatesLastUpdated] = useState<number | null>(null);
 
@@ -88,7 +120,7 @@ export default function App() {
   // Auth & Data Sync
   useEffect(() => {
     if (!supabase) return;
-    
+
     // Check Active Session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -101,35 +133,22 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch Data when User Changes
+  // Fetch Data when User Changes (Background Sync)
   useEffect(() => {
     async function loadData() {
       if (user) {
-        setLoadingData(true);
+        // Don't set loadingData=true here to avoid blocking UI
         const data = await dbService.fetchUserData(user.id);
         if (data) {
-          if (data.categories.length === 0 && data.holdings.length === 0) {
-             setCategories(INITIAL_CATEGORIES); 
-             setHoldings([]);
-             setTransactions([]);
-          } else {
-             setHoldings(data.holdings);
-             setTransactions(data.transactions);
-             if (data.categories.length > 0) setCategories(data.categories);
-             else setCategories(INITIAL_CATEGORIES);
-          }
-          setAutomations(data.automations || []);
-          setSystemLogs(data.systemLogs || []);
+          // Merge or replace logic - for now we replace to ensure consistency with DB
+          if (data.categories.length > 0) setCategories(data.categories);
+          if (data.holdings.length > 0) setHoldings(data.holdings);
+          if (data.transactions.length > 0) setTransactions(data.transactions);
+          if (data.automations) setAutomations(data.automations);
+          if (data.systemLogs) setSystemLogs(data.systemLogs);
         }
-        setLoadingData(false);
-      } else {
-        // Reset to Guest Mode Data
-        setHoldings(INITIAL_HOLDINGS);
-        setCategories(INITIAL_CATEGORIES);
-        setTransactions(INITIAL_TRANSACTIONS);
-        setAutomations(INITIAL_AUTOMATIONS);
-        setSystemLogs([]);
       }
+      // Guest mode data is already loaded from localStorage via useState initializers
     }
     loadData();
   }, [user]);
@@ -167,17 +186,17 @@ export default function App() {
   const chartData: ChartData[] = useMemo(() => {
     const categories: Record<string, number> = {};
     const typeColors: Record<string, string> = {
-      [AssetType.CASH]: '#3b82f6', 
-      [AssetType.STOCK]: '#f43f5e', 
-      [AssetType.CREDIT_CARD]: '#f97316', 
-      [AssetType.CRYPTO]: '#10b981', 
-      [AssetType.OTHER]: '#a8a29e', 
+      [AssetType.CASH]: '#3b82f6',
+      [AssetType.STOCK]: '#f43f5e',
+      [AssetType.CREDIT_CARD]: '#f97316',
+      [AssetType.CRYPTO]: '#10b981',
+      [AssetType.OTHER]: '#a8a29e',
     };
 
     holdings.forEach(h => {
       const nativeValue = h.price * h.quantity;
       const valInTWD = h.currency === 'TWD' ? nativeValue : nativeValue / rates[h.currency];
-      
+
       if (valInTWD > 0) {
         const key = h.type;
         categories[key] = (categories[key] || 0) + valInTWD;
@@ -233,16 +252,16 @@ export default function App() {
     setIsRefreshing(true);
     const updates = holdings.map(async (h) => {
       if ((h.type === AssetType.STOCK || h.type === AssetType.CRYPTO) && h.ticker && h.ticker !== 'TWD') {
-         const result = await fetchStockPrice(h.ticker);
-         if (result) {
-           const change = ((result.price - h.price) / h.price) * 100;
-           return {
-             ...h,
-             price: result.price,
-             change24h: change,
-             lastUpdated: result.timestamp
-           };
-         }
+        const result = await fetchStockPrice(h.ticker);
+        if (result) {
+          const change = ((result.price - h.price) / h.price) * 100;
+          return {
+            ...h,
+            price: result.price,
+            change24h: change,
+            lastUpdated: result.timestamp
+          };
+        }
       }
       return h;
     });
@@ -257,9 +276,9 @@ export default function App() {
       ...newTx,
       id: tempId,
       date: newTx.date || new Date().toISOString(),
-      amount: amountInTWD 
+      amount: amountInTWD
     };
-    
+
     setTransactions(prev => [transaction, ...prev]);
 
     if (newTx.sourceAssetId) {
@@ -375,7 +394,7 @@ export default function App() {
             amount: `$${amountInTWD}`
           });
         } else {
-           newLogs.push({
+          newLogs.push({
             id: logId,
             date: dateStr,
             title: `失敗：${auto.name}`,
@@ -388,56 +407,56 @@ export default function App() {
         const targetStock = updatedHoldings.find(h => h.id === auto.investAssetId);
 
         if (sourceBank && targetStock) {
-           // Budget in TWD
-           const budgetTWD = auto.amount;
-           const stockPriceTWD = targetStock.currency === 'TWD' ? targetStock.price : targetStock.price / rates[targetStock.currency];
-           
-           // Calculate Shares (Floor)
-           const sharesToBuy = Math.floor(budgetTWD / stockPriceTWD);
-           
-           if (sharesToBuy > 0) {
-             const costTWD = sharesToBuy * stockPriceTWD;
-             const costSourceCurrency = sourceBank.currency === 'TWD' ? costTWD : costTWD * rates[sourceBank.currency];
+          // Budget in TWD
+          const budgetTWD = auto.amount;
+          const stockPriceTWD = targetStock.currency === 'TWD' ? targetStock.price : targetStock.price / rates[targetStock.currency];
 
-             // Deduct from Bank
-             updatedHoldings = updatedHoldings.map(h => {
-               if (h.id === sourceBank.id) return { ...h, quantity: h.quantity - costSourceCurrency };
-               if (h.id === targetStock.id) return { ...h, quantity: h.quantity + sharesToBuy };
-               return h;
-             });
+          // Calculate Shares (Floor)
+          const sharesToBuy = Math.floor(budgetTWD / stockPriceTWD);
 
-             // Create Transaction
-             newTransactions.push({
-                id: Math.random().toString(36).substr(2, 9),
-                type: 'EXPENSE',
-                date: dateStr,
-                amount: costTWD,
-                category: '投資',
-                note: `[DCA] ${auto.name} - 買入 ${sharesToBuy} 股`,
-                sourceAssetId: sourceBank.id,
-                sourceAssetName: sourceBank.name
-             });
+          if (sharesToBuy > 0) {
+            const costTWD = sharesToBuy * stockPriceTWD;
+            const costSourceCurrency = sourceBank.currency === 'TWD' ? costTWD : costTWD * rates[sourceBank.currency];
 
-             newLogs.push({
-               id: logId,
-               date: dateStr,
-               title: `DCA 執行：${auto.name}`,
-               description: `從 ${sourceBank.name} 扣款 $${costTWD.toFixed(0)} 買入 ${sharesToBuy} 股 ${targetStock.name}。剩餘預算 $${(budgetTWD - costTWD).toFixed(0)} 未扣款。`,
-               status: 'SUCCESS',
-               amount: `-$${costTWD.toFixed(0)}`
-             });
+            // Deduct from Bank
+            updatedHoldings = updatedHoldings.map(h => {
+              if (h.id === sourceBank.id) return { ...h, quantity: h.quantity - costSourceCurrency };
+              if (h.id === targetStock.id) return { ...h, quantity: h.quantity + sharesToBuy };
+              return h;
+            });
 
-           } else {
-             newLogs.push({
-               id: logId,
-               date: dateStr,
-               title: `跳過：${auto.name}`,
-               description: `預算不足買入 1 股 (股價: ${stockPriceTWD.toFixed(0)}, 預算: ${budgetTWD})`,
-               status: 'SKIPPED'
-             });
-           }
+            // Create Transaction
+            newTransactions.push({
+              id: Math.random().toString(36).substr(2, 9),
+              type: 'EXPENSE',
+              date: dateStr,
+              amount: costTWD,
+              category: '投資',
+              note: `[DCA] ${auto.name} - 買入 ${sharesToBuy} 股`,
+              sourceAssetId: sourceBank.id,
+              sourceAssetName: sourceBank.name
+            });
+
+            newLogs.push({
+              id: logId,
+              date: dateStr,
+              title: `DCA 執行：${auto.name}`,
+              description: `從 ${sourceBank.name} 扣款 $${costTWD.toFixed(0)} 買入 ${sharesToBuy} 股 ${targetStock.name}。剩餘預算 $${(budgetTWD - costTWD).toFixed(0)} 未扣款。`,
+              status: 'SUCCESS',
+              amount: `-$${costTWD.toFixed(0)}`
+            });
+
+          } else {
+            newLogs.push({
+              id: logId,
+              date: dateStr,
+              title: `跳過：${auto.name}`,
+              description: `預算不足買入 1 股 (股價: ${stockPriceTWD.toFixed(0)}, 預算: ${budgetTWD})`,
+              status: 'SKIPPED'
+            });
+          }
         } else {
-           newLogs.push({
+          newLogs.push({
             id: logId,
             date: dateStr,
             title: `失敗：${auto.name}`,
@@ -503,25 +522,25 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background text-slate-50 font-sans selection:bg-indigo-500/30 pb-24 md:pb-8 relative">
-      
+
       {/* Modals */}
       {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} onSuccess={() => setShowAuthModal(false)} />}
-      
+
       {showAnalytics && (
-        <AnalyticsView 
-          onBack={() => setShowAnalytics(false)} 
-          allocationData={chartData} 
+        <AnalyticsView
+          onBack={() => setShowAnalytics(false)}
+          allocationData={chartData}
           currentNetWorth={netWorth}
-          transactions={transactions} 
+          transactions={transactions}
         />
       )}
 
       {showAutomationPanel && (
-        <AutomationPanel 
-          automations={automations} 
-          holdings={holdings} 
+        <AutomationPanel
+          automations={automations}
+          holdings={holdings}
           categories={categories}
-          onAddAutomation={handleAddAutomation} 
+          onAddAutomation={handleAddAutomation}
           onDeleteAutomation={handleDeleteAutomation}
           onRunNow={handleRunAutomations}
           onClose={() => setShowAutomationPanel(false)}
@@ -529,11 +548,11 @@ export default function App() {
         />
       )}
       {showSystemLogs && (
-         <SystemLogs 
-           logs={systemLogs} 
-           onClose={() => setShowSystemLogs(false)} 
-           onClear={handleClearSystemLogs} 
-         />
+        <SystemLogs
+          logs={systemLogs}
+          onClose={() => setShowSystemLogs(false)}
+          onClear={handleClearSystemLogs}
+        />
       )}
 
       {/* Settings Modal */}
@@ -552,28 +571,28 @@ export default function App() {
               </div>
               <div className="flex-1 overflow-hidden">
                 {user ? (
-                   <>
-                     <div className="font-medium text-white truncate">{user.email}</div>
-                     <div className="text-xs text-emerald-400 flex items-center gap-1">
-                       <Database size={10} /> 資料庫同步中
-                     </div>
-                   </>
+                  <>
+                    <div className="font-medium text-white truncate">{user.email}</div>
+                    <div className="text-xs text-emerald-400 flex items-center gap-1">
+                      <Database size={10} /> 資料庫同步中
+                    </div>
+                  </>
                 ) : (
-                   <>
-                     <div className="font-medium text-slate-300">訪客模式</div>
-                     <div className="text-xs text-slate-500">資料僅暫存於本機 (重整後重置)</div>
-                   </>
+                  <>
+                    <div className="font-medium text-slate-300">訪客模式</div>
+                    <div className="text-xs text-slate-500">資料僅暫存於本機 (重整後重置)</div>
+                  </>
                 )}
               </div>
             </div>
             {user ? (
-               <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-2 mb-6 bg-slate-800 hover:bg-rose-500/10 hover:text-rose-400 text-slate-300 rounded-xl transition-colors text-sm font-medium">
-                 <LogOut size={16} /> 登出帳號
-               </button>
+              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-2 mb-6 bg-slate-800 hover:bg-rose-500/10 hover:text-rose-400 text-slate-300 rounded-xl transition-colors text-sm font-medium">
+                <LogOut size={16} /> 登出帳號
+              </button>
             ) : (
-               <button onClick={() => { setShowSettings(false); setShowAuthModal(true); }} className="w-full flex items-center justify-center gap-2 py-3 mb-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors font-bold shadow-lg shadow-indigo-600/20">
-                 <User size={18} /> 登入 / 註冊會員
-               </button>
+              <button onClick={() => { setShowSettings(false); setShowAuthModal(true); }} className="w-full flex items-center justify-center gap-2 py-3 mb-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors font-bold shadow-lg shadow-indigo-600/20">
+                <User size={18} /> 登入 / 註冊會員
+              </button>
             )}
             <p className="text-sm text-slate-400 mb-4 font-bold">版面配置</p>
             <div className="space-y-3">
@@ -598,9 +617,9 @@ export default function App() {
         {/* Header */}
         <header className="flex items-center justify-between">
           <Logo className="w-10 h-10" />
-          
+
           <div className="flex items-center gap-2">
-            <button 
+            <button
               onClick={() => setShowAutomationPanel(true)}
               className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded-xl font-medium transition-colors border border-slate-700 text-sm"
               title="自動化中心"
@@ -608,98 +627,92 @@ export default function App() {
               <Workflow size={18} />
               <span className="hidden md:inline">自動化</span>
             </button>
-            <button 
+            <button
               onClick={() => setShowAnalytics(true)}
               className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-400 rounded-xl font-medium transition-colors border border-slate-700 text-sm"
             >
               <LineChart size={18} />
               <span className="hidden md:inline">資產分析</span>
             </button>
-            <button 
+            <button
               onClick={() => setShowSettings(true)}
               className={`p-1.5 pl-2 pr-2 rounded-xl border transition-all flex items-center gap-2 ${user ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300' : 'bg-slate-800 border-slate-700 text-slate-400'}`}
             >
-               {user ? <User size={18} /> : <Settings size={20} />}
+              {user ? <User size={18} /> : <Settings size={20} />}
             </button>
           </div>
         </header>
 
-        {loadingData ? (
-           <div className="flex items-center justify-center py-20">
-              <div className="animate-spin text-indigo-500"><Logo className="w-12 h-12" showText={false} /></div>
-           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-            {/* Left Column */}
-            <div className={`col-span-1 md:col-span-7 flex flex-col gap-6 ${mobileTab === 'assets' ? 'block' : 'hidden md:flex'}`}>
-              <NetWorthCard 
-                totalValue={netWorth} 
-                currency={globalCurrency} 
-                onChangeCurrency={handleChangeCurrency}
-                isRefreshing={isUpdatingRates}
-                onRefreshRates={handleRefreshRates}
-                ratesLastUpdated={ratesLastUpdated}
-                rates={rates}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+          {/* Left Column */}
+          <div className={`col-span-1 md:col-span-7 flex flex-col gap-6 ${mobileTab === 'assets' ? 'block' : 'hidden md:flex'}`}>
+            <NetWorthCard
+              totalValue={netWorth}
+              currency={globalCurrency}
+              onChangeCurrency={handleChangeCurrency}
+              isRefreshing={isUpdatingRates}
+              onRefreshRates={handleRefreshRates}
+              ratesLastUpdated={ratesLastUpdated}
+              rates={rates}
+            />
+            {visibleSections['CASH'] && (
+              <AssetSection
+                title="銀行與現金"
+                type="CASH"
+                holdings={cashAssets}
+                onUpdateHolding={handleUpdateHolding}
+                onAddHolding={handleAddHolding}
+                onRemoveHolding={handleRemoveHolding}
+                totalValue={cashTotal}
+                displayCurrency={globalCurrency}
               />
-              {visibleSections['CASH'] && (
-                <AssetSection 
-                  title="銀行與現金"
-                  type="CASH"
-                  holdings={cashAssets}
-                  onUpdateHolding={handleUpdateHolding}
-                  onAddHolding={handleAddHolding}
-                  onRemoveHolding={handleRemoveHolding}
-                  totalValue={cashTotal}
-                  displayCurrency={globalCurrency}
-                />
-              )}
-              {visibleSections['CREDIT'] && (
-                <AssetSection 
-                  title="信用卡負債"
-                  type="CREDIT"
-                  holdings={creditAssets}
-                  onUpdateHolding={handleUpdateHolding}
-                  onAddHolding={handleAddHolding}
-                  onRemoveHolding={handleRemoveHolding}
-                  totalValue={creditTotal}
-                  displayCurrency={globalCurrency}
-                />
-              )}
-              {visibleSections['INVESTMENT'] && (
-                <AssetSection 
-                  title="投資組合"
-                  type="INVESTMENT"
-                  holdings={investmentAssets}
-                  onUpdateHolding={handleUpdateHolding}
-                  onAddHolding={handleAddHolding}
-                  onRemoveHolding={handleRemoveHolding}
-                  onRefreshPrices={handleRefreshStocks}
-                  totalValue={investmentTotal}
-                  displayCurrency={globalCurrency}
-                />
-              )}
-            </div>
+            )}
+            {visibleSections['CREDIT'] && (
+              <AssetSection
+                title="信用卡負債"
+                type="CREDIT"
+                holdings={creditAssets}
+                onUpdateHolding={handleUpdateHolding}
+                onAddHolding={handleAddHolding}
+                onRemoveHolding={handleRemoveHolding}
+                totalValue={creditTotal}
+                displayCurrency={globalCurrency}
+              />
+            )}
+            {visibleSections['INVESTMENT'] && (
+              <AssetSection
+                title="投資組合"
+                type="INVESTMENT"
+                holdings={investmentAssets}
+                onUpdateHolding={handleUpdateHolding}
+                onAddHolding={handleAddHolding}
+                onRemoveHolding={handleRemoveHolding}
+                onRefreshPrices={handleRefreshStocks}
+                totalValue={investmentTotal}
+                displayCurrency={globalCurrency}
+              />
+            )}
+          </div>
 
-            {/* Right Column */}
-            <div className={`col-span-1 md:col-span-5 flex flex-col gap-6 ${mobileTab === 'ledger' ? 'block' : 'hidden md:flex'}`}>
-              <div className="md:sticky md:top-6 h-full">
-                <TransactionTracker 
-                  transactions={transactions} 
-                  onAddTransaction={handleAddTransaction} 
-                  onUpdateTransaction={handleUpdateTransaction}
-                  onDeleteTransaction={handleDeleteTransaction}
-                  paymentAssets={paymentAssets}
-                  categories={categories}
-                  onAddCategory={handleAddCategory}
-                  onUpdateCategory={handleUpdateCategory}
-                  onDeleteCategory={handleDeleteCategory}
-                  displayCurrency={globalCurrency}
-                  exchangeRate={rates[globalCurrency]}
-                />
-              </div>
+          {/* Right Column */}
+          <div className={`col-span-1 md:col-span-5 flex flex-col gap-6 ${mobileTab === 'ledger' ? 'block' : 'hidden md:flex'}`}>
+            <div className="md:sticky md:top-6 h-full">
+              <TransactionTracker
+                transactions={transactions}
+                onAddTransaction={handleAddTransaction}
+                onUpdateTransaction={handleUpdateTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
+                paymentAssets={paymentAssets}
+                categories={categories}
+                onAddCategory={handleAddCategory}
+                onUpdateCategory={handleUpdateCategory}
+                onDeleteCategory={handleDeleteCategory}
+                displayCurrency={globalCurrency}
+                exchangeRate={rates[globalCurrency]}
+              />
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Mobile Bottom Navigation */}
