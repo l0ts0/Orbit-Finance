@@ -456,7 +456,7 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
               type="datetime-local"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full min-w-0 bg-slate-900 border border-slate-700 rounded-xl py-3 px-4 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-sm md:text-base"
+              className="w-full max-w-full min-w-0 bg-slate-900 border border-slate-700 rounded-xl py-3 px-3 md:px-4 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-sm md:text-base appearance-none"
             />
           </div>
 
