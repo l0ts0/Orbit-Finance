@@ -41,13 +41,15 @@ export interface CategoryDef {
 
 export interface Transaction {
   id: string;
-  type: 'EXPENSE' | 'INCOME'; // New field
+  type: 'EXPENSE' | 'INCOME' | 'TRANSFER'; // New field
   date: string; // ISO String
   amount: number;
   category: TransactionCategory;
   note: string;
   sourceAssetId?: string; // Which asset paid for this?
   sourceAssetName?: string;
+  destinationAssetId?: string; // For Transfer
+  destinationAssetName?: string;
 }
 
 export type AutomationType = 'RECURRING' | 'DCA_INVEST';

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Zap, ArrowRight, CreditCard, Wallet, Settings, X, Plus, Trash2,
-  Edit2, Check, AlertCircle, MoreHorizontal
+  Edit2, Check, AlertCircle, MoreHorizontal, ArrowLeftRight
 } from 'lucide-react';
 import { Transaction, TransactionCategory, Holding, AssetType, CategoryDef, Currency } from '../types';
 import { CategorySelector } from './CategorySelector';
@@ -41,6 +41,12 @@ const CURRENCY_SYMBOLS: Record<Currency, string> = {
   'JPY': '¥'
 };
 
+const getCurrentLocalISO = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
+
 const TransactionTracker: React.FC<TransactionTrackerProps> = ({
   transactions,
   onAddTransaction,
@@ -58,8 +64,14 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
   const [note, setNote] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [selectedAssetId, setSelectedAssetId] = useState<string>(paymentAssets[0]?.id || '');
-  const [transactionType, setTransactionType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
+  const [destinationAssetId, setDestinationAssetId] = useState<string>('');
+  const [transactionType, setTransactionType] = useState<'EXPENSE' | 'INCOME' | 'TRANSFER'>('EXPENSE');
+  const [date, setDate] = useState(getCurrentLocalISO());
   const [error, setError] = useState<string | null>(null);
+
+  // Filter assets for Transfer (Banks only)
+  const transferAssets = paymentAssets.filter(a => a.type === AssetType.CASH);
+  const sourceAssets = transactionType === 'TRANSFER' ? transferAssets : paymentAssets;
 
   // Category Management State
   const [isManaging, setIsManaging] = useState(false);
@@ -110,28 +122,43 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
       return;
     }
 
+    if (transactionType === 'TRANSFER') {
+      if (!destinationAssetId) {
+        setError("請選擇轉入帳戶。");
+        return;
+      }
+      if (selectedAssetId === destinationAssetId) {
+        setError("轉出與轉入帳戶不能相同。");
+        return;
+      }
+    }
+
     const numAmount = parseFloat(amount);
     if (!numAmount || numAmount <= 0) {
       setError("請輸入有效金額。");
       return;
     }
 
-    if (!selectedCategoryId) {
+    if (!selectedCategoryId && transactionType !== 'TRANSFER') {
       setError("請選擇一個類別。");
       return;
     }
 
     // Find asset name
     const asset = paymentAssets.find(a => a.id === selectedAssetId);
+    const destAsset = paymentAssets.find(a => a.id === destinationAssetId);
     const categoryDef = categories.find(c => c.id === selectedCategoryId);
 
     onAddTransaction({
       type: transactionType,
       amount: numAmount, // This is in Display Currency
-      category: categoryDef?.label || '其他',
-      note: note || categoryDef?.label || '消費',
+      category: transactionType === 'TRANSFER' ? '轉帳' : (categoryDef?.label || '其他'),
+      note: note || (transactionType === 'TRANSFER' ? `轉帳至 ${destAsset?.name}` : (categoryDef?.label || '消費')),
       sourceAssetId: selectedAssetId,
       sourceAssetName: asset?.name,
+      destinationAssetId: transactionType === 'TRANSFER' ? destinationAssetId : undefined,
+      destinationAssetName: transactionType === 'TRANSFER' ? destAsset?.name : undefined,
+      date: new Date(date).toISOString(),
     });
 
     // Save last used category
@@ -140,6 +167,7 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
     // Reset Form
     setAmount('');
     setNote('');
+    setDate(getCurrentLocalISO());
     // Keep selected category and asset
   };
 
@@ -382,6 +410,13 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
           >
             收入
           </button>
+          <button
+            type="button"
+            onClick={() => { setTransactionType('TRANSFER'); setError(null); }}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${transactionType === 'TRANSFER' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            轉帳
+          </button>
         </div>
 
         <div className="space-y-4">
@@ -414,50 +449,91 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
             />
           </div>
 
-          {/* Category Selector */}
+          {/* Date Input */}
           <div>
-            <label className="text-xs text-slate-500 block mb-1.5 ml-1">選擇類別</label>
-            <CategorySelector
-              categories={categories}
-              selectedCategoryId={selectedCategoryId}
-              onSelectCategory={setSelectedCategoryId}
+            <label className="text-xs text-slate-500 block mb-1.5 ml-1">時間</label>
+            <input
+              type="datetime-local"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 px-4 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
             />
           </div>
+
+          {/* Category Selector (Hide for Transfer) */}
+          {transactionType !== 'TRANSFER' && (
+            <div>
+              <label className="text-xs text-slate-500 block mb-1.5 ml-1">選擇類別</label>
+              <CategorySelector
+                categories={categories}
+                selectedCategoryId={selectedCategoryId}
+                onSelectCategory={setSelectedCategoryId}
+              />
+            </div>
+          )}
 
           {/* Submit Button */}
           <button
             type="submit"
             className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${transactionType === 'INCOME'
               ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-              : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20'
+              : transactionType === 'TRANSFER'
+                ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20'
+                : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20'
               }`}
           >
-            <Check size={20} />
-            {transactionType === 'INCOME' ? '入帳' : '記帳'}
+            {transactionType === 'INCOME' ? <Check size={20} /> : transactionType === 'TRANSFER' ? <ArrowLeftRight size={20} /> : <Check size={20} />}
+            {transactionType === 'INCOME' ? '入帳' : transactionType === 'TRANSFER' ? '轉帳' : '記帳'}
           </button>
         </div>
 
         {/* Source Asset Selector */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
-          {paymentAssets.length === 0 ? (
-            <div className="text-xs text-slate-500 italic px-2">無可用帳戶，請先新增資產</div>
-          ) : (
-            paymentAssets.map(asset => (
-              <button
-                key={asset.id}
-                type="button"
-                onClick={() => { setSelectedAssetId(asset.id); setError(null); }}
-                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${selectedAssetId === asset.id
-                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
-                  }`}
-              >
-                {asset.type === AssetType.CREDIT_CARD ? <CreditCard size={12} /> : <Wallet size={12} />}
-                {asset.name}
-              </button>
-            ))
-          )}
+        <div>
+          <label className="text-xs text-slate-500 block mb-1.5 ml-1">{transactionType === 'TRANSFER' ? '從哪裡轉出？' : '選擇帳戶'}</label>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+            {sourceAssets.length === 0 ? (
+              <div className="text-xs text-slate-500 italic px-2">無可用帳戶，請先新增資產</div>
+            ) : (
+              sourceAssets.map(asset => (
+                <button
+                  key={asset.id}
+                  type="button"
+                  onClick={() => { setSelectedAssetId(asset.id); setError(null); }}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${selectedAssetId === asset.id
+                    ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                >
+                  {asset.type === AssetType.CREDIT_CARD ? <CreditCard size={12} /> : <Wallet size={12} />}
+                  {asset.name}
+                </button>
+              ))
+            )}
+          </div>
         </div>
+
+        {/* Destination Asset Selector (Only for Transfer) */}
+        {transactionType === 'TRANSFER' && (
+          <div className="animate-in fade-in slide-in-from-top-2">
+            <label className="text-xs text-slate-500 block mb-1.5 ml-1">轉入到哪裡？</label>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+              {transferAssets.map(asset => (
+                <button
+                  key={asset.id}
+                  type="button"
+                  onClick={() => { setDestinationAssetId(asset.id); setError(null); }}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 ${destinationAssetId === asset.id
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                >
+                  {asset.type === AssetType.CREDIT_CARD ? <CreditCard size={12} /> : <Wallet size={12} />}
+                  {asset.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </form>
 
       {/* Transaction List */}
@@ -468,6 +544,7 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
         {transactions.map((t) => {
           const catDef = categories.find(c => c.label === t.category) || categories[categories.length - 1]; // Fallback to 'Other'
           const isIncome = t.type === 'INCOME';
+          const isTransfer = t.type === 'TRANSFER';
           const displayAmount = Math.round(t.amount * exchangeRate);
 
           return (
@@ -477,8 +554,8 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
               onClick={() => startEditTransaction(t)}
             >
               <div className="flex items-start gap-3 flex-1 min-w-0">
-                <div className={`p-2.5 rounded-xl ${catDef?.color || 'text-slate-400 bg-slate-800'} transition-transform group-hover:scale-110`}>
-                  {ICON_MAP[catDef?.icon || 'MoreHorizontal'] || ICON_MAP['MoreHorizontal']}
+                <div className={`p-2.5 rounded-xl ${isTransfer ? 'text-blue-400 bg-blue-500/10' : (catDef?.color || 'text-slate-400 bg-slate-800')} transition-transform group-hover:scale-110`}>
+                  {isTransfer ? <ArrowLeftRight size={18} /> : (ICON_MAP[catDef?.icon || 'MoreHorizontal'] || ICON_MAP['MoreHorizontal'])}
                 </div>
                 <div className="min-w-0">
                   <p className="text-slate-200 text-sm font-medium truncate">{t.note}</p>
@@ -486,7 +563,7 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
                     <p>{new Date(t.date).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                     {t.sourceAssetName && (
                       <p className="text-indigo-400/70 px-1.5 py-0.5 bg-indigo-500/10 rounded whitespace-nowrap">
-                        {t.sourceAssetName}
+                        {t.sourceAssetName} {isTransfer && t.destinationAssetName ? `→ ${t.destinationAssetName}` : ''}
                       </p>
                     )}
                   </div>
@@ -494,8 +571,8 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
               </div>
               <div className="flex items-center gap-4 md:gap-6 shrink-0 md:self-auto self-start text-right">
                 <div className="text-right">
-                  <div className={`${isIncome ? 'text-emerald-400' : 'text-rose-400'} font-bold font-mono`}>
-                    {isIncome ? '+' : '-'}{CURRENCY_SYMBOLS[displayCurrency]}{displayAmount.toLocaleString()}
+                  <div className={`${isIncome ? 'text-emerald-400' : isTransfer ? 'text-blue-400' : 'text-rose-400'} font-bold font-mono`}>
+                    {isIncome ? '+' : isTransfer ? '' : '-'}{CURRENCY_SYMBOLS[displayCurrency]}{displayAmount.toLocaleString()}
                   </div>
                   <div className="text-[10px] text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity text-right">
                     點擊編輯

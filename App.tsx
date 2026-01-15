@@ -53,6 +53,11 @@ export default function App() {
     return (saved as Currency) || 'TWD';
   });
 
+  const [assetOrder, setAssetOrder] = useState<'CREDIT_FIRST' | 'CASH_FIRST'>(() => {
+    const saved = localStorage.getItem('assetOrder');
+    return (saved as 'CREDIT_FIRST' | 'CASH_FIRST') || 'CREDIT_FIRST';
+  });
+
   const [holdings, setHoldings] = useState<Holding[]>(() => {
     const saved = localStorage.getItem('holdings');
     return saved ? JSON.parse(saved) : INITIAL_HOLDINGS;
@@ -86,7 +91,7 @@ export default function App() {
   const [showSystemLogs, setShowSystemLogs] = useState(false);
 
   // Persistence Effects
-  useEffect(() => { localStorage.setItem('globalCurrency', globalCurrency); }, [globalCurrency]);
+  useEffect(() => { localStorage.setItem('assetOrder', assetOrder); }, [assetOrder]);
   useEffect(() => { localStorage.setItem('holdings', JSON.stringify(holdings)); }, [holdings]);
   useEffect(() => { localStorage.setItem('categories', JSON.stringify(categories)); }, [categories]);
   useEffect(() => { localStorage.setItem('transactions', JSON.stringify(transactions)); }, [transactions]);
@@ -104,18 +109,35 @@ export default function App() {
   });
 
   // Exchange Rates State (1 TWD = ?)
-  const [rates, setRates] = useState<Record<Currency, number>>({
-    'TWD': 1,
-    'USD': 0.0307,
-    'JPY': 4.7,
+  // Exchange Rates State (1 TWD = ?)
+  const [rates, setRates] = useState<Record<Currency, number>>(() => {
+    const saved = localStorage.getItem('rates');
+    return saved ? JSON.parse(saved) : {
+      'TWD': 1,
+      'USD': 0.0307,
+      'JPY': 4.7,
+    };
   });
-  const [ratesLastUpdated, setRatesLastUpdated] = useState<number | null>(null);
+  const [ratesLastUpdated, setRatesLastUpdated] = useState<number | null>(() => {
+    const saved = localStorage.getItem('ratesLastUpdated');
+    return saved ? Number(saved) : null;
+  });
+
+  // Persistence for Rates
+  useEffect(() => {
+    localStorage.setItem('rates', JSON.stringify(rates));
+    if (ratesLastUpdated) localStorage.setItem('ratesLastUpdated', String(ratesLastUpdated));
+  }, [rates, ratesLastUpdated]);
 
   // Separation of Assets
   const cashAssets = useMemo(() => holdings.filter(h => h.type === AssetType.CASH), [holdings]);
   const creditAssets = useMemo(() => holdings.filter(h => h.type === AssetType.CREDIT_CARD), [holdings]);
   const investmentAssets = useMemo(() => holdings.filter(h => h.type === AssetType.STOCK || h.type === AssetType.CRYPTO || h.type === AssetType.OTHER), [holdings]);
-  const paymentAssets = useMemo(() => [...cashAssets, ...creditAssets], [cashAssets, creditAssets]);
+  const paymentAssets = useMemo(() => {
+    return assetOrder === 'CREDIT_FIRST'
+      ? [...creditAssets, ...cashAssets]
+      : [...cashAssets, ...creditAssets];
+  }, [cashAssets, creditAssets, assetOrder]);
 
   // Auth & Data Sync
   useEffect(() => {
@@ -153,9 +175,17 @@ export default function App() {
     loadData();
   }, [user]);
 
-  // Initial Rates Fetch
+  // Initial Rates Fetch from DB (Server-side updates)
   useEffect(() => {
-    handleRefreshRates();
+    async function loadRates() {
+      const dbRates = await dbService.fetchExchangeRates();
+      if (dbRates) {
+        // Merge with existing rates to ensure we don't lose keys if DB is partial
+        setRates(prev => ({ ...prev, ...dbRates.rates }));
+        setRatesLastUpdated(dbRates.timestamp);
+      }
+    }
+    loadRates();
   }, []);
 
   // Net Worth Calculation
@@ -287,7 +317,14 @@ export default function App() {
           const amountInAssetCurrency = h.currency === 'TWD' ? amountInTWD : amountInTWD * rates[h.currency];
           let newQuantity = h.quantity;
           if (newTx.type === 'INCOME') newQuantity += amountInAssetCurrency;
-          else newQuantity -= amountInAssetCurrency;
+          else newQuantity -= amountInAssetCurrency; // EXPENSE or TRANSFER (Source)
+          if (user) dbService.updateHolding(h.id, { quantity: newQuantity });
+          return { ...h, quantity: newQuantity };
+        }
+        // Handle Destination for Transfer
+        if (newTx.type === 'TRANSFER' && h.id === newTx.destinationAssetId) {
+          const amountInAssetCurrency = h.currency === 'TWD' ? amountInTWD : amountInTWD * rates[h.currency];
+          const newQuantity = h.quantity + amountInAssetCurrency;
           if (user) dbService.updateHolding(h.id, { quantity: newQuantity });
           return { ...h, quantity: newQuantity };
         }
@@ -315,7 +352,14 @@ export default function App() {
           const amountInAssetCurrency = h.currency === 'TWD' ? tx.amount : tx.amount * rates[h.currency];
           let newQuantity = h.quantity;
           if (tx.type === 'INCOME') newQuantity -= amountInAssetCurrency;
-          else newQuantity += amountInAssetCurrency;
+          else newQuantity += amountInAssetCurrency; // EXPENSE or TRANSFER (Source)
+          if (user) dbService.updateHolding(h.id, { quantity: newQuantity });
+          return { ...h, quantity: newQuantity };
+        }
+        // Handle Destination for Transfer (Reverse)
+        if (tx.type === 'TRANSFER' && h.id === tx.destinationAssetId) {
+          const amountInAssetCurrency = h.currency === 'TWD' ? tx.amount : tx.amount * rates[h.currency];
+          const newQuantity = h.quantity - amountInAssetCurrency;
           if (user) dbService.updateHolding(h.id, { quantity: newQuantity });
           return { ...h, quantity: newQuantity };
         }
@@ -607,6 +651,13 @@ export default function App() {
               <button onClick={() => toggleSection('INVESTMENT')} className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50">
                 <span className="text-slate-200">投資組合</span>
                 {visibleSections['INVESTMENT'] ? <CheckSquare className="text-indigo-400" size={18} /> : <Square className="text-slate-600" size={18} />}
+              </button>
+            </div>
+            <p className="text-sm text-slate-400 mb-4 font-bold mt-6">記帳偏好</p>
+            <div className="space-y-3">
+              <button onClick={() => setAssetOrder(prev => prev === 'CREDIT_FIRST' ? 'CASH_FIRST' : 'CREDIT_FIRST')} className="w-full flex items-center justify-between p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50">
+                <span className="text-slate-200">優先顯示信用卡</span>
+                {assetOrder === 'CREDIT_FIRST' ? <CheckSquare className="text-indigo-400" size={18} /> : <Square className="text-slate-600" size={18} />}
               </button>
             </div>
           </div>

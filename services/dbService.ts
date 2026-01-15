@@ -104,7 +104,7 @@ export const dbService = {
     const dbUpdates: any = { ...updates };
     if (updates.billDay !== undefined) dbUpdates.bill_day = updates.billDay;
     if (updates.lastUpdated !== undefined) dbUpdates.last_updated = new Date(updates.lastUpdated).toISOString();
-    
+
     // Remove client-only fields that aren't in DB if necessary (e.g. change24h is usually not stored but fetched live)
     delete dbUpdates.id;
     delete dbUpdates.change24h;
@@ -143,7 +143,7 @@ export const dbService = {
     const dbUpdates: any = { ...updates };
     if (updates.sourceAssetId !== undefined) dbUpdates.source_asset_id = updates.sourceAssetId;
     if (updates.sourceAssetName !== undefined) dbUpdates.source_asset_name = updates.sourceAssetName;
-    
+
     delete dbUpdates.id;
     delete dbUpdates.sourceAssetId;
     delete dbUpdates.sourceAssetName;
@@ -253,5 +253,27 @@ export const dbService = {
     if (!supabase) return;
     const { error } = await supabase.from('system_logs').delete().eq('user_id', userId);
     if (error) console.error('Error clearing system logs:', error);
+  },
+
+  // --- EXCHANGE RATES ---
+  async fetchExchangeRates() {
+    if (!supabase) return null;
+    const { data, error } = await supabase.from('exchange_rates').select('*');
+    if (error) {
+      console.error('Error fetching exchange rates:', error);
+      return null;
+    }
+    if (!data || data.length === 0) return null;
+
+    const rates: Record<string, number> = {};
+    let timestamp = 0;
+
+    data.forEach((row: any) => {
+      rates[row.currency] = Number(row.rate);
+      const ts = new Date(row.last_updated).getTime();
+      if (ts > timestamp) timestamp = ts;
+    });
+
+    return { rates, timestamp };
   }
 };
