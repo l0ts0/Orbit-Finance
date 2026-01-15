@@ -26,7 +26,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
       setError(detail);
       return;
     }
-    
+
     setLoading(true);
     setError(null);
 
@@ -37,16 +37,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
           password,
         });
         if (error) throw error;
+        onSuccess();
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
-        // For signup, we might want to automatically sign in or show a message
-        // Supabase auto signs in if email confirm is off, otherwise sends email
+
+        // Check if session is missing (implies email verification required)
+        if (data.user && !data.session) {
+          alert('註冊成功！請前往您的電子信箱收信並驗證帳號，完成後即可登入。');
+          setIsLogin(true); // Switch to login mode
+        } else {
+          onSuccess();
+        }
       }
-      onSuccess();
     } catch (err: any) {
       setError(err.message || "Authentication failed");
     } finally {
@@ -57,8 +63,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-surface border border-border rounded-3xl w-full max-w-md shadow-2xl overflow-hidden relative">
-        
-        <button 
+
+        <button
           onClick={onClose}
           className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
         >
@@ -80,8 +86,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
               <label className="text-xs font-semibold text-slate-500 ml-1">電子郵件</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                <input 
-                  type="email" 
+                <input
+                  type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -95,8 +101,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
               <label className="text-xs font-semibold text-slate-500 ml-1">密碼</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                <input 
-                  type="password" 
+                <input
+                  type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -112,8 +118,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
               </div>
             )}
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={loading}
               className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 mt-2"
             >
@@ -129,7 +135,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onSuccess }) => {
         <div className="bg-slate-900/50 p-4 text-center border-t border-slate-800">
           <p className="text-sm text-slate-400">
             {isLogin ? '還沒有帳號？' : '已經有帳號了？'} {' '}
-            <button 
+            <button
               onClick={() => { setIsLogin(!isLogin); setError(null); }}
               className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
             >
