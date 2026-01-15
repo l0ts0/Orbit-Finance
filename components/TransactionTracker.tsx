@@ -250,7 +250,7 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
   };
 
   return (
-    <div className="bg-surface border border-border rounded-3xl p-6 shadow-lg h-full flex flex-col relative overflow-hidden">
+    <div className="bg-surface border border-border rounded-3xl p-4 md:p-6 shadow-lg h-full flex flex-col relative overflow-hidden">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
@@ -456,7 +456,7 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
               type="datetime-local"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 px-4 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+              className="w-full min-w-0 bg-slate-900 border border-slate-700 rounded-xl py-3 px-4 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-sm md:text-base"
             />
           </div>
 
