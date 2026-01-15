@@ -8,11 +8,12 @@ interface AssetSectionProps {
   type: 'CASH' | 'INVESTMENT' | 'CREDIT';
   holdings: Holding[];
   onUpdateHolding: (id: string, updates: Partial<Holding>) => void;
-  onAddHolding: (holding: Omit<Holding, 'id'>) => void;
+  onAddHolding: (holding: Omit<Holding, 'id'>, sourceAssetId?: string) => void;
   onRemoveHolding?: (id: string) => void;
   onRefreshPrices?: () => void;
   totalValue: number;
-  displayCurrency?: Currency; // New prop
+  displayCurrency?: Currency;
+  cashAssets?: Holding[]; // For investment purchase deduction
 }
 
 const CURRENCY_SYMBOLS: Record<Currency, string> = {
@@ -30,7 +31,8 @@ const AssetSection: React.FC<AssetSectionProps> = ({
   onRemoveHolding,
   onRefreshPrices,
   totalValue,
-  displayCurrency = 'TWD'
+  displayCurrency = 'TWD',
+  cashAssets = []
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -49,6 +51,7 @@ const AssetSection: React.FC<AssetSectionProps> = ({
   const [newAmount, setNewAmount] = useState('');
   const [newPrice, setNewPrice] = useState('');
   const [newBillDay, setNewBillDay] = useState('');
+  const [selectedSourceId, setSelectedSourceId] = useState('');
 
   const startEdit = (h: Holding) => {
     setEditingId(h.id);
@@ -128,7 +131,7 @@ const AssetSection: React.FC<AssetSectionProps> = ({
         billDay: type === 'CREDIT' ? parseInt(newBillDay) : undefined
       };
 
-      onAddHolding(newAsset);
+      onAddHolding(newAsset, selectedSourceId || undefined);
       setIsAdding(false);
       // Reset
       setNewName('');
@@ -136,6 +139,7 @@ const AssetSection: React.FC<AssetSectionProps> = ({
       setNewAmount('');
       setNewPrice('');
       setNewBillDay('');
+      setSelectedSourceId('');
       setMarketType('TW'); // Reset to default
     } catch (error) {
       console.error("Error adding asset:", error);
@@ -281,8 +285,29 @@ const AssetSection: React.FC<AssetSectionProps> = ({
             </div>
 
             {type === 'INVESTMENT' && (
-              <div className="text-xs text-slate-500 px-1">
-                * 系統將自動取得最新股價與幣別
+              <div className="space-y-2">
+                <div className="text-xs text-slate-500 px-1">
+                  * 系統將自動取得最新股價與幣別
+                </div>
+
+                {/* Payment Account Selector */}
+                {cashAssets.length > 0 && (
+                  <div className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2">
+                    <label className="text-xs text-slate-500 block mb-1.5">扣款帳戶 (選填)</label>
+                    <select
+                      value={selectedSourceId}
+                      onChange={e => setSelectedSourceId(e.target.value)}
+                      className="w-full bg-transparent text-white text-sm outline-none"
+                    >
+                      <option value="">不扣款 (僅記錄庫存)</option>
+                      {cashAssets.map(asset => (
+                        <option key={asset.id} value={asset.id}>
+                          {asset.name} (餘額: {CURRENCY_SYMBOLS[asset.currency] || '$'}{asset.quantity.toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
 

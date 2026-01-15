@@ -263,10 +263,62 @@ export default function App() {
     if (user) await dbService.updateHolding(id, updates);
   };
 
-  const handleAddHolding = async (newHolding: Omit<Holding, 'id'>) => {
+  const handleAddHolding = async (newHolding: Omit<Holding, 'id'>, sourceAssetId?: string) => {
     const tempId = Math.random().toString(36).substr(2, 9);
     const holding: Holding = { ...newHolding, id: tempId };
-    setHoldings(prev => [...prev, holding]);
+
+    // Optimistic Update for New Holding
+    let updatedHoldings = [...holdings, holding];
+
+    // Handle Deduction from Source Asset
+    if (sourceAssetId) {
+      const sourceAsset = updatedHoldings.find(h => h.id === sourceAssetId);
+      if (sourceAsset) {
+        // Calculate Cost
+        const costNative = newHolding.price * newHolding.quantity;
+        // Convert to Source Asset Currency
+        // If Source is TWD, cost is (Price * Qty) * (Rate of Stock Currency / Rate of TWD) -> actually just Rate of Stock Currency if TWD is base 1
+        // Let's rely on rates. 
+        // Value in TWD = costNative / rates[newHolding.currency]
+        // Cost in Source = Value in TWD * rates[sourceAsset.currency]
+
+        const valInTWD = newHolding.currency === 'TWD' ? costNative : costNative / rates[newHolding.currency];
+        const costInSource = sourceAsset.currency === 'TWD' ? valInTWD : valInTWD * rates[sourceAsset.currency];
+
+        updatedHoldings = updatedHoldings.map(h => {
+          if (h.id === sourceAssetId) {
+            const newQty = h.quantity - costInSource;
+            if (user) dbService.updateHolding(h.id, { quantity: newQty });
+            return { ...h, quantity: newQty };
+          }
+          return h;
+        });
+
+        // Create Transaction
+        const newTx: Transaction = {
+          id: Math.random().toString(36).substr(2, 9),
+          type: 'EXPENSE',
+          amount: valInTWD, // Transaction amount is usually stored in TWD (Base) or we store display amount? 
+          // Wait, handleAddTransaction converts to TWD. Here we should store in TWD if that's the convention.
+          // Looking at handleAddTransaction: const amountInTWD = newTx.amount / rates[globalCurrency];
+          // It seems transactions state stores amount in TWD? 
+          // Let's check handleAddTransaction again. 
+          // "amount: amountInTWD" -> Yes.
+
+          category: '投資',
+          note: `買入 ${newHolding.name} (${newHolding.ticker})`,
+          date: new Date().toISOString(),
+          sourceAssetId: sourceAsset.id,
+          sourceAssetName: sourceAsset.name
+        };
+
+        setTransactions(prev => [newTx, ...prev]);
+        if (user) dbService.addTransaction(user.id, newTx);
+      }
+    }
+
+    setHoldings(updatedHoldings);
+
     if (user) {
       const dbHolding = await dbService.addHolding(user.id, newHolding);
       if (dbHolding) setHoldings(prev => prev.map(h => h.id === tempId ? dbHolding : h));
@@ -751,6 +803,7 @@ export default function App() {
                 onRefreshPrices={handleRefreshStocks}
                 totalValue={investmentTotal}
                 displayCurrency={globalCurrency}
+                cashAssets={cashAssets}
               />
             )}
           </div>
