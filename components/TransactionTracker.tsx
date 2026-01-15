@@ -452,12 +452,14 @@ const TransactionTracker: React.FC<TransactionTrackerProps> = ({
           {/* Date Input */}
           <div>
             <label className="text-xs text-slate-500 block mb-1.5 ml-1">時間</label>
-            <input
-              type="datetime-local"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full max-w-full min-w-0 bg-slate-900 border border-slate-700 rounded-xl py-3 px-3 md:px-4 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all text-sm md:text-base appearance-none"
-            />
+            <div className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all overflow-hidden flex items-center">
+              <input
+                type="datetime-local"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full bg-transparent border-none p-0 text-white placeholder-slate-600 focus:ring-0 focus:outline-none text-sm md:text-base appearance-none min-w-0"
+              />
+            </div>
           </div>
 
           {/* Category Selector (Hide for Transfer) */}
