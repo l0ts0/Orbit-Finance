@@ -285,6 +285,15 @@ export default function App() {
         const result = await fetchStockPrice(h.ticker);
         if (result) {
           const change = ((result.price - h.price) / h.price) * 100;
+
+          if (user) {
+            await dbService.updateHolding(h.id, {
+              price: result.price,
+              change24h: change,
+              lastUpdated: result.timestamp
+            });
+          }
+
           return {
             ...h,
             price: result.price,
@@ -297,6 +306,7 @@ export default function App() {
     });
     const updatedHoldings = await Promise.all(updates);
     setHoldings(updatedHoldings);
+    setIsRefreshing(false);
   };
 
   const handleAddTransaction = async (newTx: Omit<Transaction, 'id' | 'date'> & { date?: string }) => {
