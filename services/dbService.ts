@@ -11,7 +11,7 @@ const mapHoldingFromDB = (h: any): Holding => ({
   quantity: Number(h.quantity),
   currency: h.currency,
   color: h.color,
-  change24h: 0, // Calculated dynamically via API usually, defaulting to 0 from DB
+  change24h: Number(h.change24h) || 0,
   billDay: h.bill_day,
   lastUpdated: h.last_updated ? new Date(h.last_updated).getTime() : undefined
 });
@@ -24,7 +24,9 @@ const mapTransactionFromDB = (t: any): Transaction => ({
   category: t.category,
   note: t.note,
   sourceAssetId: t.source_asset_id,
-  sourceAssetName: t.source_asset_name
+  sourceAssetName: t.source_asset_name,
+  destinationAssetId: t.destination_asset_id,
+  destinationAssetName: t.destination_asset_name
 });
 
 const mapCategoryFromDB = (c: any): CategoryDef => ({
@@ -93,6 +95,7 @@ export const dbService = {
       currency: h.currency,
       color: h.color,
       bill_day: h.billDay,
+      change24h: h.change24h,
       last_updated: h.lastUpdated ? new Date(h.lastUpdated).toISOString() : null
     }).select().single();
     if (error) console.error('Error adding holding:', error);
@@ -107,7 +110,7 @@ export const dbService = {
 
     // Remove client-only fields that aren't in DB if necessary (e.g. change24h is usually not stored but fetched live)
     delete dbUpdates.id;
-    delete dbUpdates.change24h;
+    // delete dbUpdates.change24h; // Allow updating change24h
     delete dbUpdates.billDay;
     delete dbUpdates.lastUpdated;
 
@@ -132,7 +135,9 @@ export const dbService = {
       category: t.category,
       note: t.note,
       source_asset_id: t.sourceAssetId,
-      source_asset_name: t.sourceAssetName
+      source_asset_name: t.sourceAssetName,
+      destination_asset_id: t.destinationAssetId,
+      destination_asset_name: t.destinationAssetName
     }).select().single();
     if (error) console.error('Error adding transaction:', error);
     return data ? mapTransactionFromDB(data) : null;
@@ -143,10 +148,14 @@ export const dbService = {
     const dbUpdates: any = { ...updates };
     if (updates.sourceAssetId !== undefined) dbUpdates.source_asset_id = updates.sourceAssetId;
     if (updates.sourceAssetName !== undefined) dbUpdates.source_asset_name = updates.sourceAssetName;
+    if (updates.destinationAssetId !== undefined) dbUpdates.destination_asset_id = updates.destinationAssetId;
+    if (updates.destinationAssetName !== undefined) dbUpdates.destination_asset_name = updates.destinationAssetName;
 
     delete dbUpdates.id;
     delete dbUpdates.sourceAssetId;
     delete dbUpdates.sourceAssetName;
+    delete dbUpdates.destinationAssetId;
+    delete dbUpdates.destinationAssetName;
 
     const { error } = await supabase.from('transactions').update(dbUpdates).eq('id', id);
     if (error) console.error('Error updating transaction:', error);
@@ -275,5 +284,20 @@ export const dbService = {
     });
 
     return { rates, timestamp };
+  },
+
+  async updateExchangeRates(rates: Record<string, number>, timestamp: number) {
+    if (!supabase) return;
+
+    // We need to upsert each rate
+    const updates = Object.entries(rates).map(([currency, rate]) => {
+      return supabase.from('exchange_rates').upsert({
+        currency,
+        rate,
+        last_updated: new Date(timestamp).toISOString()
+      }, { onConflict: 'currency' });
+    });
+
+    await Promise.all(updates);
   }
 };

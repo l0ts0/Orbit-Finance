@@ -254,6 +254,11 @@ export default function App() {
     if (result) {
       setRates(result.rates);
       setRatesLastUpdated(result.timestamp);
+
+      // Persist to DB
+      if (user) {
+        await dbService.updateExchangeRates(result.rates, result.timestamp);
+      }
     }
     setIsUpdatingRates(false);
   };
@@ -615,6 +620,82 @@ export default function App() {
     if (user) await dbService.clearSystemLogs(user.id);
   };
 
+  const handleSyncToDB = async () => {
+    if (!user) return;
+    if (!confirm('確定要將本地資料同步到資料庫嗎？這將會覆寫資料庫中的資料（如果有的話）。')) return;
+
+    setLoadingData(true);
+    try {
+      // 1. Sync Categories
+      // We don't have IDs for local categories usually if they are default, but let's just insert them.
+      // Actually, default categories might duplicate if we just insert. 
+      // But for "Restore", we assume DB is empty or we want to push local state.
+      // Let's just insert everything.
+
+      // 2. Sync Holdings and Map IDs
+      const holdingIdMap: Record<string, string> = {};
+
+      for (const h of holdings) {
+        const { id, ...rest } = h;
+        const saved = await dbService.addHolding(user.id, rest);
+        if (saved) {
+          holdingIdMap[id] = saved.id;
+        }
+      }
+
+      // 3. Sync Transactions (Update IDs)
+      for (const t of transactions) {
+        const { id, ...rest } = t;
+        const newSourceId = t.sourceAssetId ? holdingIdMap[t.sourceAssetId] : undefined;
+        const newDestId = t.destinationAssetId ? holdingIdMap[t.destinationAssetId] : undefined;
+
+        await dbService.addTransaction(user.id, {
+          ...rest,
+          sourceAssetId: newSourceId,
+          destinationAssetId: newDestId
+        });
+      }
+
+      // 4. Sync Automations
+      for (const a of automations) {
+        const { id, ...rest } = a;
+        const newTargetId = a.targetAssetId ? holdingIdMap[a.targetAssetId] : undefined;
+        const newSourceId = a.sourceAssetId ? holdingIdMap[a.sourceAssetId] : undefined;
+        const newInvestId = a.investAssetId ? holdingIdMap[a.investAssetId] : undefined;
+
+        await dbService.addAutomation(user.id, {
+          ...rest,
+          targetAssetId: newTargetId,
+          sourceAssetId: newSourceId,
+          investAssetId: newInvestId
+        });
+      }
+
+      // 5. Sync Logs
+      for (const log of systemLogs) {
+        const { id, ...rest } = log;
+        await dbService.addSystemLog(user.id, rest);
+      }
+
+      // 6. Sync Categories (Simple insert)
+      // Filter out default IDs if we want, but user might have customized them.
+      // Let's just insert.
+      for (const c of categories) {
+        const { id, ...rest } = c;
+        await dbService.addCategory(user.id, rest);
+      }
+
+      alert('同步完成！請重新整理網頁以載入資料庫數據。');
+      window.location.reload();
+
+    } catch (error) {
+      console.error('Sync failed:', error);
+      alert('同步失敗，請查看 Console。');
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
   // --- Render ---
 
   const handleAddCategory = async (newCat: CategoryDef) => {
@@ -692,9 +773,14 @@ export default function App() {
               </div>
             </div>
             {user ? (
-              <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-2 mb-6 bg-slate-800 hover:bg-rose-500/10 hover:text-rose-400 text-slate-300 rounded-xl transition-colors text-sm font-medium">
-                <LogOut size={16} /> 登出帳號
-              </button>
+              <>
+                <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-2 mb-2 bg-slate-800 hover:bg-rose-500/10 hover:text-rose-400 text-slate-300 rounded-xl transition-colors text-sm font-medium">
+                  <LogOut size={16} /> 登出帳號
+                </button>
+                <button onClick={handleSyncToDB} className="w-full flex items-center justify-center gap-2 py-2 mb-6 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 rounded-xl transition-colors text-sm font-medium">
+                  <Database size={16} /> 同步本地資料到資料庫
+                </button>
+              </>
             ) : (
               <button onClick={() => { setShowSettings(false); setShowAuthModal(true); }} className="w-full flex items-center justify-center gap-2 py-3 mb-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-colors font-bold shadow-lg shadow-indigo-600/20">
                 <User size={18} /> 登入 / 註冊會員
